@@ -1,7 +1,8 @@
 # finite-state-automata
 
-NFA: Nondeterministic Finite Automaton
-DFA: Deterministic Finite Automaton
+### Types of Finite Automata
+-NFA: Nondeterministic Finite Automaton
+-DFA: Deterministic Finite Automaton
 
 ### Steps for conversion from regular expression to DFA
 - Thompson's construction (regex to NFA)

@@ -5,6 +5,6 @@
 - DFA: Deterministic Finite Automaton
 
 ### Steps for conversion from regular expression to DFA
-- Thompson's construction (regex to NFA)
-- Powerset construction (NFA to DFA)
-- DFA Minimization (get optimal DFA)
+1. Thompson's construction (regex to NFA)
+2. Powerset construction (NFA to DFA)
+3. DFA Minimization (get optimal DFA)

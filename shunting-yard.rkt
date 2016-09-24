@@ -1,5 +1,7 @@
 #lang racket
 
+(require test-engine/racket-tests)
+
 ;;; SYState is a (make-sy-state List List List)
 (define-struct sy-state (input output stack))
 
@@ -13,7 +15,8 @@
 (define operators (hash "+" (make-op-props 1 'left)
                         "-" (make-op-props 1 'left)
                         "*" (make-op-props 2 'left)
-                        "/" (make-op-props 2 'left)))
+                        "/" (make-op-props 2 'left)
+                        "^" (make-op-props 3 'left)))
 
 ;;; Is given string an Operator?
 ;;; String -> Boolean
@@ -39,6 +42,7 @@
         [output (sy-state-output state)]
         [stack  (sy-state-stack state)])
     (cond [(and (not (empty? (sy-state-stack state)))
+                (operator? (first stack))
                 (lesser? operator
                          (first stack)))
            (sy-operator-step operator
@@ -53,17 +57,17 @@
 
 ;;; Steps through the Shunting Yard algorithm after right parenthese.
 ;;; SYState -> SYState
-(define (sy-right-paren-step operator state)
+(define (sy-right-paren-step state)
   (let ([input  (sy-state-input state)]
         [output (sy-state-output state)]
         [stack  (sy-state-stack state)])
     (cond [(string=? (first stack) "(") (make-sy-state input
                                                        output
                                                        (rest stack))]
-          [else (sy-right-paren-step operator (make-sy-state input
-                                                             (append output
-                                                                     (list (first stack)))
-                                                             (rest stack)))])))
+          [else (sy-right-paren-step (make-sy-state input
+                                                    (append output
+                                                            (list (first stack)))
+                                                    (rest stack)))])))
 
 ;;; Steps through the Shunting Yard algorithm for given token.
 ;;; SYState -> SYState
@@ -100,4 +104,12 @@
                                                   output
                                                   stack)))])))
 
-(sy-state-output (sy-step (make-sy-state (list "1" "+" "2" "*" "4") empty empty)))
+;;; Converts from infix to RPN using Shunting Yard algorithm.
+(define (shunting-yard input)
+  (string-join (sy-state-output (sy-step (make-sy-state (string-split input " ") empty empty))) " "))
+
+(check-expect (shunting-yard "1 + 2 * 4") "1 2 4 * +")
+(check-expect (shunting-yard "1 / 2 * 4") "1 2 / 4 *")
+(check-expect (shunting-yard "( 1 + 2 ) / ( 3 * 4 )") "1 2 + 3 4 * /")
+(check-expect (shunting-yard "2 * 3 ^ 3 / 4") "2 3 3 ^ * 4 /")
+(test)

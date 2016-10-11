@@ -24,8 +24,9 @@
   (hash-has-key? operators input))
 
 ;;; Does first operator have lower precendence than second?
+;;; It's functionality is specific to Shunting Yard.
 ;;; Operator Operator -> Boolean
-(define (lesser? op-one op-two)
+(define (sy-lesser? op-one op-two)
   (let ([op-one-props (hash-ref operators op-one)]
         [op-two-props (hash-ref operators op-two)])
     (or (and (symbol=? (op-props-assoc op-one-props) 'left)
@@ -43,7 +44,7 @@
         [stack  (sy-state-stack state)])
     (cond [(and (not (empty? (sy-state-stack state)))
                 (operator? (first stack))
-                (lesser? operator
+                (sy-lesser? operator
                          (first stack)))
            (sy-operator-step operator
                              (make-sy-state input

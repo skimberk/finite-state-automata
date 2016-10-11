@@ -1,5 +1,9 @@
 #lang racket
 
+(provide state)
+(provide transition)
+(provide eval-nfa)
+
 ;;; A State is a (make-state ListOfTransitions)
 (define-struct state (transitions))
 

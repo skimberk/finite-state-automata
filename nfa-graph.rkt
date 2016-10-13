@@ -4,6 +4,8 @@
 ;;; - empty
 ;;; - (cons Transition ListOfTransitions)
 
+;;; A SetOfBoxedStates is a (set (box State) ...)
+
 ;;; An Input is either 'empty or Character
 
 ;;; A State is a (make-state ListOfTransitions)
@@ -23,3 +25,28 @@
                           [a (box (make-state (list (make-transition #\A
                                                                      b))))])
                    (make-nfa a f)))
+
+;; Does NFA match string?
+;; match-string? : NFA String
+(define (match-string? nfa s)
+  (set-member? (eval-nfa nfa s) (nfa-final nfa)))
+
+;;; States of NFA after evaluating with string.
+;;; eval-nfa : NFA String -> SetOfBoxedStates
+(define (eval-nfa nfa s)
+  (foldl (lambda (char states)
+           (let ([r (set-map states
+                             (lambda (state)
+                               (resulting-states state
+                                                 char)))])
+             (if (empty? r) (set) (apply set-union r))))
+         (set (nfa-start nfa)) (string->list s)))
+
+;;; Resulting states after passing char to state.
+;;; resulting-states : (box State) Character -> SetOfBoxedStates
+(define (resulting-states state char)
+  (foldl (lambda (t states)
+           (if (or (symbol? (transition-char t))
+                   (char=? (transition-char t) char))
+               (set-add states (transition-to-state t))
+               states)) (set) (state-transitions (unbox state))))

@@ -6,5 +6,6 @@
 
 ### Steps for conversion from regular expression to DFA
 1. Thompson's construction (regex to NFA)
-2. Powerset construction (NFA to DFA)
-3. DFA Minimization (get optimal DFA)
+2. Epsilon NFA to NFA (remove epsilon transitions) http://cs.stackexchange.com/q/49702
+3. Powerset construction (NFA to DFA)
+4. DFA Minimization (get optimal DFA)

@@ -1,5 +1,11 @@
 #lang racket
 
+(provide (struct-out state))
+(provide (struct-out transition))
+(provide (struct-out nfa))
+(provide match-string?)
+(provide eval-nfa)
+
 ;;; A ListOfTransitions is one of:
 ;;; - empty
 ;;; - (cons Transition ListOfTransitions)
@@ -18,8 +24,7 @@
 (define-struct nfa (start final))
 
 ;;; Test NFA matching regular expression "AB"
-(define test-nfa (shared ([f (box (make-state (list (make-transition 'empty
-                                                                     f))))]
+(define test-nfa (shared ([f (box (make-state empty))]
                           [b (box (make-state (list (make-transition #\B
                                                                      f))))]
                           [a (box (make-state (list (make-transition #\A
@@ -46,7 +51,32 @@
 ;;; resulting-states : (box State) Character -> SetOfBoxedStates
 (define (resulting-states state char)
   (foldl (lambda (t states)
-           (if (or (symbol? (transition-char t))
-                   (char=? (transition-char t) char))
+           (if (and (char? (transition-char t))
+                    (char=? (transition-char t) char))
                (set-add states (transition-to-state t))
                states)) (set) (state-transitions (unbox state))))
+
+;;; Can final state be reached with epsilon transitions?
+;;; epsilon-to-final? : NFA -> Boolean
+(define (epsilon-to-final? nfa)
+  (or (equal? (nfa-start nfa) (nfa-final nfa))
+      (foldl (lambda (t bool)
+               (or bool
+                   (and (symbol? (transition-char t))
+                        (epsilon-to-final? (make-nfa (transition-to-state t)
+                                                     (nfa-final nfa))))))
+             #false (state-transitions (unbox (nfa-start nfa))))))
+
+;; One recursive step of removing epsilon transitions from NFA.
+;; remove-epsilons-step! : (box State) SetOfBoxedStates -> (box State)
+(define (remove-epsilons-step! state visited-states)
+  (cond [(set-member? visited-states state) state]
+        [else (set-box! state (make-state (foldl (lambda (t ts)
+                                                   (append (if (symbol? (transition-char t))
+                                                               (state-transitions (unbox (remove-epsilons-step! (transition-to-state t)
+                                                                                                                (set-add visited-states state))))
+                                                               (list t))
+                                                           ts)) '() (state-transitions (unbox state)))))
+              state]))
+        
+  

@@ -52,7 +52,8 @@
 (define (transitions nfa-in state-in)
   (foldl (lambda ([transition : (Pair condition state)]
                   [states     : (Setof (Pairof char state))])
-           (if (symbol=? (car (car transition)) state-in)
+           (if (and (symbol=? (car (car transition)) state-in)
+                    (not (symbol? (cdr (car transition)))))
                (set-add states (cons (cdr (car transition))
                                      (cdr transition)))
                states))
@@ -67,17 +68,6 @@
          (ann (set) (Setof (Pairof char state)))
          (set->list states-in)))
 
-#|
-(: accepting-s-states (-> nfa (Listof s-state) (Setof s-state)))
-(define (accepting-s-states nfa-in eclosures)
-  (foldl (lambda ([c : s-state]
-                  [s : (Setof s-state)])
-           (if (set-empty? (set-intersect (nfa-accepting nfa-in) c))
-               s
-               (set-add s c)))
-         (ann (set) (Setof s-state)) eclosures))
-|#
-
 (: accepting-s-states (-> nfa (Listof s-state) (Setof s-state)))
 (define (accepting-s-states nfa-in eclosures)
   (list->set (filter (lambda ([s : s-state])
@@ -87,7 +77,11 @@
 #|
 (: eclosure-transitions (-> nfa (Listof s-state) (HashTable condition s-state)))
 (define (eclosure-transitions nfa-in eclosures)
-  (add-list-to-hash
+  (add-list-to-hash (apply append (map (lambda ([e : s-state])
+                           (map ((curry cons) e)
+                                (set->list (set-transitions nfa-in e)))
+                         eclosures)))
+                    (hash)))
 |#
 
 (: no-epsilon (-> nfa nfa-s))

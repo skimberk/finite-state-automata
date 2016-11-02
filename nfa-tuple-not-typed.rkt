@@ -60,23 +60,6 @@
                  (not (symbol? (cdr (car transition))))))
           (hash->list (nfa-transitions nfa))))
 
-;;; Remove epsilon transitions from list of transitions.
-;;; [Hashof State State] [Listof Transition] -> [Listof Transition]
-(define (remove-epsilon-transitions transitions)
-  (filter (lambda (transition)
-            (not (symbol? (cdr (car transition)))))
-          transitions))
-
-;;; Updates representations of states in transition.
-;;; [Hashof State State] Transition -> Transition
-(define (update-transition-states state->state transition)
-  (let ([state (car (car transition))]
-        [input (cdr (car transition))]
-        [to    (cdr transition)])
-    (cons (cons (hash-ref state->state state)
-                input)
-          (hash-ref state->state to))))
-
 ;;; Equivalent NFA without epsilon transitions.
 ;;; NFA -> NFA
 (define (no-epsilon nfa)

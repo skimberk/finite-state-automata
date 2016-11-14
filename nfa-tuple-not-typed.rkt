@@ -3,12 +3,18 @@
 (require "queue.rkt")
 
 ;;; A State is a Symbol
-;;; A Input is either a Char or 'ep
+;;; A Input is a Char
 ;;; A Condition is a [Pairof State Input]
 ;;; A Transition is a [Pairof Condition State]
 ;;; A TransitionTable is a [Hashof Condition State]
 
+;;; A EInput is either a Input or 'ep
+;;; A ECondition is a [Pairof State EInput]
+;;; A ETransition is a [Pairof ECondition State]
+;;; A ETransitionTable is a [Hashof ECondition State]
+
 ;;; A NFA is a (make-nfa [Setof State] TransitionTable State [Setof State])
+;;; A ENFA is a (make-nfa [Setof State] ETransitionTable State [Setof State])
 (define-struct nfa (states transitions initial accepting))
 
 ;;; An NFA equal to regular expression "AB"
@@ -39,7 +45,7 @@
                         (cdr (first l)))]))
 
 ;;; All states reachable from state (excluding ones on blacklist).
-;;; NFA State [Setof State] -> [Listof State]
+;;; ENFA State [Setof State] -> [Listof State]
 (define (reachable-states nfa from blacklist)
   (filter-map (λ (transition)
                 (and (equal? (car (car transition))
@@ -51,7 +57,7 @@
 
 ;;; Epsilon closure of state (all states that can be reached via
 ;;; epsilon transitions).
-;;; NFA State -> [Setof State]
+;;; ENFA State -> [Setof State]
 (define (epsilon-closure nfa state)
   (local [(define (step current visit)
             (cond [(queue-empty? visit) current]
@@ -66,7 +72,7 @@
     (step (set) (enqueue empty-queue state))))
 
 ;;; All non-epsilon transitions for a set of states.
-;;; NFA [Setof State] -> [Listof Transition]
+;;; ENFA [Setof State] -> [Listof Transition]
 (define (set-transitions nfa states)
   (filter (λ (transition)
             (and (set-member? states (car (car transition)))
@@ -74,7 +80,7 @@
           (hash->list (nfa-transitions nfa))))
 
 ;;; Remove epsilon transitions from NFA.
-;;; NFA -> NFA
+;;; ENFA -> NFA
 (define (remove-epsilon nfa)
   (local [(define transitions (hash->list (nfa-transitions nfa)))]
     (make-nfa (nfa-states nfa)
@@ -86,7 +92,7 @@
               (nfa-accepting nfa))))
 
 ;;; Equivalent NFA without epsilon transitions.
-;;; NFA -> NFA
+;;; ENFA -> NFA
 (define (no-epsilon nfa)
   (local [(define (new-transitions current state eclosure)
             (local [(define e-transitions (set-transitions current
@@ -130,6 +136,3 @@
                                             (nfa-initial nfa))
                                    (set)))]
     (remove-epsilon equivalent)))
-
-(nfa-accepting (no-epsilon test-nfa))
-(nfa-transitions (no-epsilon test-nfa))

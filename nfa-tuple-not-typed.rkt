@@ -1,5 +1,7 @@
 #lang racket
 
+(require "queue.rkt")
+
 ;;; A State is a Symbol
 ;;; A Input is either a Char or 'ep
 ;;; A Condition is a [Pairof State Input]
@@ -19,66 +21,115 @@
                              s0
                              (set s2))))
 
+;;; An NFA that is just a loop
+(define loop-nfa (let ([s0 (gensym)]
+                       [s1 (gensym)])
+                   (make-nfa (set s0 s1)
+                             (hash (cons s0 'ep) s1
+                                   (cons s1 'ep) s0)
+                             s0
+                             (set s1))))
+
 ;;; Add a list of keys and values to a hash.
-;;; [A B]   [Listof [Pairof A B]] -> [Hashof A B]
-(define (list->hash l)
-  (cond [(empty? l) (hash)]
-        [else (hash-set (list->hash (rest l))
+;;; [A B]   [Hashof A B] [Listof [Pairof A B]] -> [Hashof A B]
+(define (hash+list h l)
+  (cond [(empty? l) h]
+        [else (hash-set (hash+list h (rest l))
                         (car (first l))
                         (cdr (first l)))]))
 
-;;;  Zips together two lists of equal size.
-;;; [A B]   [Listof A] [Listof B] -> [Listof [Pairof A B]]
-(define (zip a b)
-  (map cons a b))
+;;; All states reachable from state (excluding ones on blacklist).
+;;; NFA State [Setof State] -> [Listof State]
+(define (reachable-states nfa from blacklist)
+  (filter-map (λ (transition)
+                (and (equal? (car (car transition))
+                             from)
+                     (symbol? (cdr (car transition)))
+                     (not (set-member? blacklist (cdr transition)))
+                     (cdr transition)))
+              (hash->list (nfa-transitions nfa))))
 
 ;;; Epsilon closure of state (all states that can be reached via
 ;;; epsilon transitions).
-;;; NFA State -> State
+;;; NFA State -> [Setof State]
 (define (epsilon-closure nfa state)
-  (foldl (lambda (transition states)
-           (if (and (symbol=? (car (car transition)) state)
-                    (symbol? (cdr (car transition))))
-               (set-union states (epsilon-closure nfa (cdr transition)))
-               states))
-         (set state) (hash->list (nfa-transitions nfa))))
-
-;;; List of states and their epsilon closures.
-;;; NFA -> [Listof [Pairof State [Setof State]]]
-(define (epsilon-closures nfa)
-  (set-map (nfa-states nfa)
-           (lambda (state)
-             (cons state
-                   (epsilon-closure nfa
-                                    state)))))
+  (local [(define (step current visit)
+            (cond [(queue-empty? visit) current]
+                  [else (local [(define dequeued    (dequeue visit))
+                                (define visit-first (car dequeued))
+                                (define visit-rest  (cdr dequeued))]
+                          (step (set-add current visit-first)
+                                (enqueue-list visit-rest
+                                              (reachable-states nfa
+                                                                visit-first
+                                                                current))))]))]
+    (step (set) (enqueue empty-queue state))))
 
 ;;; All non-epsilon transitions for a set of states.
 ;;; NFA [Setof State] -> [Listof Transition]
 (define (set-transitions nfa states)
-  (filter (lambda (transition)
+  (filter (λ (transition)
             (and (set-member? states (car (car transition)))
                  (not (symbol? (cdr (car transition))))))
           (hash->list (nfa-transitions nfa))))
 
-;;; All transitions for given epsilon closures.
-;;; NFA [Listof [Setof State]] -> [Listof Transition]
-(define (epsilon-closure-transitions nfa eclosures)
-  (apply append (map (lambda (eclosure)
-                       (map (lambda (transition)
-                              (cons eclosure (cdr transition)))
-                            (set-transitions nfa eclosure)))
-                     eclosures)))
+;;; Remove epsilon transitions from NFA.
+;;; NFA -> NFA
+(define (remove-epsilon nfa)
+  (local [(define transitions (hash->list (nfa-transitions nfa)))]
+    (make-nfa (nfa-states nfa)
+              (hash+list (hash)
+                         (filter (λ (transition)
+                                   (not (symbol? (cdar transition))))
+                                 transitions))
+              (nfa-initial nfa)
+              (nfa-accepting nfa))))
 
 ;;; Equivalent NFA without epsilon transitions.
 ;;; NFA -> NFA
 (define (no-epsilon nfa)
-  (letrec ([eclosure-pairs (epsilon-closures nfa)]
-           [eclosures (map cdr eclosure-pairs)])
-    (make-nfa (list->set eclosures)
-              (list->hash (epsilon-closure-transitions nfa
-                                                       eclosures))
-              (epsilon-closure nfa (nfa-initial nfa))
-              (list->set (map cdr (filter (lambda (pair)
-                                            (set-member? (nfa-accepting nfa)
-                                                         (car pair)))
-                                          eclosure-pairs))))))
+  (local [(define (new-transitions current state eclosure)
+            (local [(define e-transitions (set-transitions current
+                                                           eclosure))
+                    (define transitions (map (λ (transition)
+                                               (cons (cons state
+                                                           (cdar transition))
+                                                     (cdr transition)))
+                                             e-transitions))]
+              (hash+list (nfa-transitions current) transitions)))
+          (define (new-accepting current state eclosure)
+            (if (not (set-empty? (set-intersect (nfa-accepting current)
+                                                eclosure)))
+                (set-add (nfa-accepting current) state)
+                (nfa-accepting current)))
+          (define (step current visit visited)
+            (cond [(queue-empty? visit) current]
+                  [else (local [(define dequeued (dequeue visit))
+                                (define visit-first (car dequeued))
+                                (define visit-rest (cdr dequeued))
+                                (define new-visited
+                                  (set-add visited visit-first))
+                                (define eclosure
+                                  (epsilon-closure nfa
+                                                   visit-first))]
+                          (step (make-nfa (nfa-states nfa)
+                                          (new-transitions current
+                                                           visit-first
+                                                           eclosure)
+                                          (nfa-initial nfa)
+                                          (new-accepting current
+                                                         visit-first
+                                                         eclosure))
+                                (enqueue-list visit-rest
+                                              (reachable-states nfa
+                                                                visit-first
+                                                                new-visited))
+                                new-visited))]))
+          (define equivalent (step nfa
+                                   (enqueue empty-queue
+                                            (nfa-initial nfa))
+                                   (set)))]
+    (remove-epsilon equivalent)))
+
+(nfa-accepting (no-epsilon test-nfa))
+(nfa-transitions (no-epsilon test-nfa))

@@ -1,6 +1,6 @@
 #lang racket
 
-;;; A State is either a Symbol or a [Setof Symbol]
+;;; A State is a Symbol
 ;;; A Input is either a Char or 'ep
 ;;; A Condition is a [Pairof State Input]
 ;;; A Transition is a [Pairof Condition State]
@@ -14,7 +14,7 @@
                        [s1 (gensym)]
                        [s2 (gensym)])
                    (make-nfa (set s0 s1 s2)
-                             (hash (cons s0 #\A) s1
+                             (hash (cons s0 'ep) s1
                                    (cons s1 #\B) s2)
                              s0
                              (set s2))))
@@ -44,7 +44,7 @@
          (set state) (hash->list (nfa-transitions nfa))))
 
 ;;; List of states and their epsilon closures.
-;;; NFA -> [Listof [Pairof State State]]
+;;; NFA -> [Listof [Pairof State [Setof State]]]
 (define (epsilon-closures nfa)
   (set-map (nfa-states nfa)
            (lambda (state)
@@ -60,14 +60,25 @@
                  (not (symbol? (cdr (car transition))))))
           (hash->list (nfa-transitions nfa))))
 
+;;; All transitions for given epsilon closures.
+;;; NFA [Listof [Setof State]] -> [Listof Transition]
+(define (epsilon-closure-transitions nfa eclosures)
+  (apply append (map (lambda (eclosure)
+                       (map (lambda (transition)
+                              (cons eclosure (cdr transition)))
+                            (set-transitions nfa eclosure)))
+                     eclosures)))
+
 ;;; Equivalent NFA without epsilon transitions.
 ;;; NFA -> NFA
 (define (no-epsilon nfa)
-  (let ([eclosures (epsilon-closures nfa)])
-    (make-nfa (list->set (map cdr eclosures))
-              (hash)
+  (letrec ([eclosure-pairs (epsilon-closures nfa)]
+           [eclosures (map cdr eclosure-pairs)])
+    (make-nfa (list->set eclosures)
+              (list->hash (epsilon-closure-transitions nfa
+                                                       eclosures))
               (epsilon-closure nfa (nfa-initial nfa))
-              (list->set (filter (lambda (pair)
-                                   (set-member? (nfa-accepting nfa)
-                                                (car pair)))
-                                 eclosures)))))
+              (list->set (map cdr (filter (lambda (pair)
+                                            (set-member? (nfa-accepting nfa)
+                                                         (car pair)))
+                                          eclosure-pairs))))))

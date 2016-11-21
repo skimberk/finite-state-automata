@@ -1,32 +1,30 @@
 #lang racket
 
-(require "nfa-graph.rkt")
+(require racket/hash)
+(require "nfa-tuple-not-typed.rkt")
 
-;; An NFASymbol is one of:
-;; - 'empty
-;; - Character
-
-;; Creates NFA for a symbol.
-;; symbol-nfa : NFASymbol -> NFA
-(define (symbol-nfa symbol)
-  (shared ([s2 (box (make-state (list (make-transition 'empty
-                                                       s2))))]
-           [s1 (box (make-state (list (make-transition symbol
-                                                       s2))))])
-    (make-nfa a f)))
+;; Creates NFA for an Input.
+;; symbol-nfa : Input -> NFA
+(define (input-nfa input)
+  (let ([s0 (gensym)]
+        [s1 (gensym)])
+    (make-nfa (set s0 s1)
+              (hash (cons s0 input) s1)
+              s0
+              (set s1))))
 
 ;; Creates NFA for union of two NFAs.
 ;; union-nfa : NFA NFA -> NFA
 (define (union-nfa a b)
-  (shared ([s2 (box (make-state (list (make-transition 'empty
-                                                       f))))]
-           [s1 (box (make-state (list (make-transition 'empty
-                                                       (nfa-start a))
-                                      (make-transition 'empty
-                                                       (nfa-start b)))))])
-    (set-box! a (make-state (cons (make-transition 'empty s2)
-                                  (nfa-transitions (unbox a)))))
-    (set-box! b (make-state (cons (make-transition 'empty s2)
-                                  (nfa-transitions (unbox b)))))                  
-    (make-nfa s1 s2)))
+  (let ([s0 (gensym)]
+        [s1 (gensym)])
+    (make-nfa (set-union (set s0 s1)
+                         (nfa-states a)
+                         (nfa-states b))
+              (hash-union (hash (cons s0 'ep) (set (nfa-initial a)
+                                                   (nfa-initial b)))
+                          (nfa-transitions a)
+                          (nfa-transitions b))
+              s0
+              (set s1))))
   

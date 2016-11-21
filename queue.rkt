@@ -4,6 +4,7 @@
          queue-empty?
          enqueue
          enqueue-list
+         enqueue-set
          dequeue)
 
 ;;; A [Queueof T] is a (make-queue [Listof T] [Listof T])
@@ -29,6 +30,11 @@
   (foldl (λ (item curr-queue)
            (enqueue curr-queue item))
          queue items))
+
+;;; Adds set of elements to end of queue.
+;;; [Queueof T] [Setof T] -> [Queueof T]
+(define (enqueue-set queue items)
+  (enqueue-list queue (set->list items)))
 
 ;;; Removes first element from queue.
 ;;; [Queueof T] -> [Pairof T [Queueof T]]

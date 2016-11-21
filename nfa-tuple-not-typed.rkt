@@ -8,13 +8,13 @@
 ;;; A State is a Symbol
 ;;; A Input is a Char
 ;;; A Condition is a [Pairof State Input]
-;;; A Transition is a [Pairof Condition State]
-;;; A TransitionTable is a [Hashof Condition State]
+;;; A Transition is a [Pairof Condition [Setof State]]
+;;; A TransitionTable is a [Hashof Condition [Setof State]]
 
 ;;; A EInput is either a Input or 'ep
 ;;; A ECondition is a [Pairof State EInput]
-;;; A ETransition is a [Pairof ECondition State]
-;;; A ETransitionTable is a [Hashof ECondition State]
+;;; A ETransition is a [Pairof ECondition [Setof State]]
+;;; A ETransitionTable is a [Hashof ECondition [Setof State]]
 
 ;;; A NFA is a (make-nfa [Setof State] TransitionTable State [Setof State])
 ;;; A ENFA is a (make-nfa [Setof State] ETransitionTable State [Setof State])
@@ -25,8 +25,8 @@
                        [s1 (gensym)]
                        [s2 (gensym)])
                    (make-nfa (set s0 s1 s2)
-                             (hash (cons s0 #\A) s1
-                                   (cons s1 #\B) s2)
+                             (hash (cons s0 #\A) (set s1)
+                                   (cons s1 #\B) (set s2))
                              s0
                              (set s2))))
 
@@ -34,8 +34,8 @@
 (define loop-nfa (let ([s0 (gensym)]
                        [s1 (gensym)])
                    (make-nfa (set s0 s1)
-                             (hash (cons s0 'ep) s1
-                                   (cons s1 'ep) s0)
+                             (hash (cons s0 'ep) (set s1)
+                                   (cons s1 'ep) (set s0))
                              s0
                              (set s1))))
 
@@ -47,12 +47,17 @@
                         (car (first l))
                         (cdr (first l)))]))
 
+;;; Union of list of sets
+;;; [A]    [Listof [Setof A]] -> [Setof A]
+(define (list-set-union l)
+  (if (empty? l) '() (apply set-union l)))
+
 ;;; All transitions for set of states (excluding ones on blacklist).
 ;;; ENFA [Setof State] [Setof State] -> [Listof Transition]
 (define (state-transitions nfa from blacklist)
   (filter (λ (transition)
-            (and (set-member? from (car (car transition)))
-                 (not (set-member? blacklist (cdr transition)))))
+            (and (set-member? from (caar transition))
+                 (not (set-member? blacklist (caar transition)))))
           (hash->list (nfa-transitions nfa))))
 
 ;;; All epsilon transitions for a set of states (excluding ones on blacklist).
@@ -70,19 +75,19 @@
           (state-transitions nfa from blacklist)))
 
 ;;; All states reachable from state (excluding ones on blacklist).
-;;; ENFA State [Setof State] -> [Listof State]
+;;; ENFA State [Setof State] -> [Setof State]
 (define (reachable-states nfa from blacklist)
-  (map cdr (state-transitions nfa
-                              (set from)
-                              blacklist)))
+  (list-set-union (map cdr (state-transitions nfa
+                                               (set from)
+                                               blacklist))))
 
 ;;; All states reachable from state via epsilon transitions
 ;;; (excluding ones on blacklist).
-;;; ENFA State [Setof State] -> [Listof State]
+;;; ENFA State [Setof State] -> [Setof State]
 (define (reachable-states/epsilon nfa from blacklist)
-  (map cdr (state-transitions/epsilon nfa
-                                      (set from)
-                                      blacklist)))
+  (list-set-union (map cdr (state-transitions/epsilon nfa
+                                                       (set from)
+                                                       blacklist))))
 
 ;;; All possible reachable states from state given reachability function.
 ;;; ENFA State [ENFA State [Setof State] -> [Listof State]] -> [Setof State]
@@ -93,10 +98,10 @@
                                 (define visit-first (car dequeued))
                                 (define visit-rest  (cdr dequeued))]
                           (step (set-add current visit-first)
-                                (enqueue-list visit-rest
-                                              (reachable nfa
-                                                         visit-first
-                                                         current))))]))]
+                                (enqueue-set visit-rest
+                                             (reachable nfa
+                                                        visit-first
+                                                        current))))]))]
     (step (set) (enqueue empty-queue from))))
 
 ;;; All possible reachable states from NFA
@@ -168,10 +173,10 @@
                                           (new-accepting current
                                                          visit-first
                                                          eclosure))
-                                (enqueue-list visit-rest
-                                              (reachable-states nfa
-                                                                visit-first
-                                                                new-visited))
+                                (enqueue-set visit-rest
+                                             (reachable-states nfa
+                                                               visit-first
+                                                               new-visited))
                                 new-visited))]))
           (define equivalent (step nfa
                                    (enqueue empty-queue

@@ -2,6 +2,9 @@
 
 (require "queue.rkt")
 
+(provide no-epsilon
+         (struct-out nfa))
+
 ;;; A State is a Symbol
 ;;; A Input is a Char
 ;;; A Condition is a [Pairof State Input]
@@ -111,9 +114,23 @@
 ;;; ENFA -> NFA
 (define (remove-epsilon nfa)
   (make-nfa (nfa-states nfa)
-            (state-transitions nfa (nfa-states nfa) '())
+            (hash+list (hash)
+                       (state-transitions/no-epsilon nfa
+                                                     (nfa-states nfa)
+                                                     '()))
             (nfa-initial nfa)
             (nfa-accepting nfa)))
+
+;;; Remove unreachable states (and their transitions) from NFA.
+;;; NFA -> NFA
+(define (remove-unreachable nfa)
+  (local [(define reachable (all-reachable/nfa nfa))]
+    (make-nfa reachable
+            (hash+list (hash)
+                       (state-transitions nfa reachable '()))
+            (nfa-initial nfa)
+            (set-intersect (nfa-accepting nfa)
+                           reachable))))
 
 ;;; Equivalent NFA without epsilon transitions.
 ;;; ENFA -> NFA
@@ -160,4 +177,4 @@
                                    (enqueue empty-queue
                                             (nfa-initial nfa))
                                    (set)))]
-    (remove-epsilon equivalent)))
+    (remove-unreachable (remove-epsilon equivalent))))

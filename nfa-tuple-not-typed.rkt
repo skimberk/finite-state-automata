@@ -22,7 +22,7 @@
                        [s1 (gensym)]
                        [s2 (gensym)])
                    (make-nfa (set s0 s1 s2)
-                             (hash (cons s0 'ep) s1
+                             (hash (cons s0 #\A) s1
                                    (cons s1 #\B) s2)
                              s0
                              (set s2))))
@@ -44,21 +44,46 @@
                         (car (first l))
                         (cdr (first l)))]))
 
+;;; All transitions for set of states (excluding ones on blacklist).
+;;; ENFA [Setof State] [Setof State] -> [Listof Transition]
+(define (state-transitions nfa from blacklist)
+  (filter (λ (transition)
+            (and (set-member? from (car (car transition)))
+                 (not (set-member? blacklist (cdr transition)))))
+          (hash->list (nfa-transitions nfa))))
+
+;;; All epsilon transitions for a set of states (excluding ones on blacklist).
+;;; ENFA [Setof State] -> [Listof Transition]
+(define (state-transitions/epsilon nfa from blacklist)
+  (filter (λ (transition)
+            (symbol? (cdr (car transition))))
+          (state-transitions nfa from blacklist)))
+
+;;; All non-epsilon transitions for a set of states (excluding ones on blacklist).
+;;; ENFA [Setof State] -> [Listof Transition]
+(define (state-transitions/no-epsilon nfa from blacklist)
+  (filter (λ (transition)
+            (not (symbol? (cdr (car transition)))))
+          (state-transitions nfa from blacklist)))
+
 ;;; All states reachable from state (excluding ones on blacklist).
 ;;; ENFA State [Setof State] -> [Listof State]
 (define (reachable-states nfa from blacklist)
-  (filter-map (λ (transition)
-                (and (equal? (car (car transition))
-                             from)
-                     (symbol? (cdr (car transition)))
-                     (not (set-member? blacklist (cdr transition)))
-                     (cdr transition)))
-              (hash->list (nfa-transitions nfa))))
+  (map cdr (state-transitions nfa
+                              (set from)
+                              blacklist)))
 
-;;; Epsilon closure of state (all states that can be reached via
-;;; epsilon transitions).
-;;; ENFA State -> [Setof State]
-(define (epsilon-closure nfa state)
+;;; All states reachable from state via epsilon transitions
+;;; (excluding ones on blacklist).
+;;; ENFA State [Setof State] -> [Listof State]
+(define (reachable-states/epsilon nfa from blacklist)
+  (map cdr (state-transitions/epsilon nfa
+                                      (set from)
+                                      blacklist)))
+
+;;; All possible reachable states from state given reachability function.
+;;; ENFA State [ENFA State [Setof State] -> [Listof State]] -> [Setof State]
+(define (all-reachable nfa from reachable)
   (local [(define (step current visit)
             (cond [(queue-empty? visit) current]
                   [else (local [(define dequeued    (dequeue visit))
@@ -66,37 +91,37 @@
                                 (define visit-rest  (cdr dequeued))]
                           (step (set-add current visit-first)
                                 (enqueue-list visit-rest
-                                              (reachable-states nfa
-                                                                visit-first
-                                                                current))))]))]
-    (step (set) (enqueue empty-queue state))))
+                                              (reachable nfa
+                                                         visit-first
+                                                         current))))]))]
+    (step (set) (enqueue empty-queue from))))
 
-;;; All non-epsilon transitions for a set of states.
-;;; ENFA [Setof State] -> [Listof Transition]
-(define (set-transitions nfa states)
-  (filter (λ (transition)
-            (and (set-member? states (car (car transition)))
-                 (not (symbol? (cdr (car transition))))))
-          (hash->list (nfa-transitions nfa))))
+;;; All possible reachable states from NFA
+;;; ENFA -> [Setof State]
+(define (all-reachable/nfa nfa)
+  (all-reachable nfa (nfa-initial nfa) reachable-states))
+
+;;; Epsilon closure of state (all states that can be reached via
+;;; epsilon transitions).
+;;; ENFA State -> [Setof State]
+(define (epsilon-closure nfa state)
+  (all-reachable nfa state reachable-states/epsilon))
 
 ;;; Remove epsilon transitions from NFA.
 ;;; ENFA -> NFA
 (define (remove-epsilon nfa)
-  (local [(define transitions (hash->list (nfa-transitions nfa)))]
-    (make-nfa (nfa-states nfa)
-              (hash+list (hash)
-                         (filter (λ (transition)
-                                   (not (symbol? (cdar transition))))
-                                 transitions))
-              (nfa-initial nfa)
-              (nfa-accepting nfa))))
+  (make-nfa (nfa-states nfa)
+            (state-transitions nfa (nfa-states nfa) '())
+            (nfa-initial nfa)
+            (nfa-accepting nfa)))
 
 ;;; Equivalent NFA without epsilon transitions.
 ;;; ENFA -> NFA
 (define (no-epsilon nfa)
   (local [(define (new-transitions current state eclosure)
-            (local [(define e-transitions (set-transitions current
-                                                           eclosure))
+            (local [(define e-transitions (state-transitions current
+                                                             eclosure
+                                                             '()))
                     (define transitions (map (λ (transition)
                                                (cons (cons state
                                                            (cdar transition))

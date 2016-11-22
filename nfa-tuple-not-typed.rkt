@@ -21,14 +21,16 @@
 (define-struct nfa (states transitions initial accepting))
 
 ;;; An NFA equal to regular expression "AB"
-(define test-nfa (let ([s0 (gensym)]
-                       [s1 (gensym)]
-                       [s2 (gensym)])
-                   (make-nfa (set s0 s1 s2)
+(define test-nfa (let ([s0 'state0]
+                       [s1 'state1]
+                       [s2 'state2]
+                       [s3 'state3])
+                   (make-nfa (set s0 s1 s2 s3)
                              (hash (cons s0 #\A) (set s1)
-                                   (cons s1 #\B) (set s2))
+                                   (cons s1 'ep) (set s2)
+                                   (cons s2 #\B) (set s3))
                              s0
-                             (set s2))))
+                             (set s3))))
 
 ;;; An NFA that is just a loop
 (define loop-nfa (let ([s0 (gensym)]
@@ -160,8 +162,6 @@
                   [else (local [(define dequeued (dequeue visit))
                                 (define visit-first (car dequeued))
                                 (define visit-rest (cdr dequeued))
-                                (define new-visited
-                                  (set-add visited visit-first))
                                 (define eclosure
                                   (epsilon-closure nfa
                                                    visit-first))]
@@ -176,8 +176,8 @@
                                 (enqueue-set visit-rest
                                              (reachable-states nfa
                                                                visit-first
-                                                               new-visited))
-                                new-visited))]))
+                                                               visited))
+                                (set-add visited visit-first)))]))
           (define equivalent (step nfa
                                    (enqueue empty-queue
                                             (nfa-initial nfa))

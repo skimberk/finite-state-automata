@@ -14,7 +14,7 @@
 
 ;;; A [NFA T] is a (make-nfa [Setof [State T]]
 ;;;                          [NTransitionTable T]
-;;;                          [State T]
+;;;                          [Setof [State T]]
 ;;;                          [Setof [State T]])
 
 ;;; A [DFA T] is a (make-dfa [Setof [State T]]
@@ -34,7 +34,7 @@
                              (hash (cons s0 #\A) (set s1)
                                    (cons s1 'ep) (set s2)
                                    (cons s2 #\B) (set s3))
-                             s0
+                             (set s0)
                              (set s3))))
 
 ;;; An [NFA Symbol] equal to regular expression "A(B|C)"
@@ -46,7 +46,7 @@
                              (hash (cons s0 #\A) (set s1 s2)
                                    (cons s1 #\B) (set s3)
                                    (cons s2 #\C) (set s3))
-                             s0
+                             (set s0)
                              (set s3))))
 
 ;;; An [NFA Symbol] that is just a loop
@@ -55,7 +55,7 @@
                    (make-nfa (set s0 s1)
                              (hash (cons s0 'ep) (set s1)
                                    (cons s1 'ep) (set s0))
-                             s0
+                             (set s0)
                              (set s1))))
 
 ;;; Union of list of sets
@@ -130,7 +130,7 @@
 ;;; [NFA T] -> [DFA [Setof T]]
 (define (nfa->dfa nfa)
   (local [(define initial-state
-            (epsilon-closure nfa (set (nfa-initial nfa))))
+            (epsilon-closure nfa (nfa-initial nfa)))
           (define (add-states current-dfa visit-first visit-rest)
             (local [(define transitions
                       (pred-transitions nfa

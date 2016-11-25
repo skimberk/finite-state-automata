@@ -76,14 +76,14 @@
             (not (symbol? (cdr (car transition)))))
           (state-transitions nfa from blacklist)))
 
-;;; All states reachable from state (excluding ones on blacklist).
+;;; All states directly reachable from state (excluding ones on blacklist).
 ;;; ENFA State [Setof State] -> [Setof State]
 (define (reachable-states nfa from blacklist)
   (list-set-union (map cdr (state-transitions nfa
                                                (set from)
                                                blacklist))))
 
-;;; All states reachable from state via epsilon transitions
+;;; All states directly reachable from state via epsilon transitions
 ;;; (excluding ones on blacklist).
 ;;; ENFA State [Setof State] -> [Setof State]
 (define (reachable-states/epsilon nfa from blacklist)

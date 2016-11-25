@@ -17,12 +17,13 @@
 ;;;                          [State T]
 ;;;                          [Setof [State T]])
 
-;;; A [DFA T] is a (make-nfa [Setof [State T]]
+;;; A [DFA T] is a (make-dfa [Setof [State T]]
 ;;;                          [DTransitionTable T]
 ;;;                          [State T]
 ;;;                          [Setof [State T]])
 
 (define-struct nfa (states transitions initial accepting))
+(define-struct dfa (states transitions initial accepting))
 
 ;;; An [NFA Symbol] equal to regular expression "AB"
 (define test-nfa (let ([s0 'state0]
@@ -33,6 +34,18 @@
                              (hash (cons s0 #\A) (set s1)
                                    (cons s1 'ep) (set s2)
                                    (cons s2 #\B) (set s3))
+                             s0
+                             (set s3))))
+
+;;; An [NFA Symbol] equal to regular expression "A(B|C)"
+(define test-nfa2 (let ([s0 'state0]
+                       [s1 'state1]
+                       [s2 'state2]
+                       [s3 'state3])
+                   (make-nfa (set s0 s1 s2 s3)
+                             (hash (cons s0 #\A) (set s1 s2)
+                                   (cons s1 #\B) (set s3)
+                                   (cons s2 #\C) (set s3))
                              s0
                              (set s3))))
 
@@ -50,6 +63,14 @@
 (define (list-set-union l)
   (if (empty? l) '() (apply set-union l)))
 
+;;; Add a list of keys and values to a hash.
+;;; [Hashof T U] [Listof [Pairof T U]] -> [Hashof T U]
+(define (hash+list h l)
+  (cond [(empty? l) h]
+        [else (hash-set (hash+list h (rest l))
+                        (car (first l))
+                        (cdr (first l)))]))
+
 ;;; All transitions that match predicate.
 ;;; [NFA T] [[NTransition T] -> Boolean] -> [Listof [NTransition T]]
 (define (pred-transitions nfa pred)
@@ -65,6 +86,14 @@
 (define (not-pred pred)
   (λ (transition)
     (not (pred transition))))
+
+;;; Predicate which is true if all given predicates are true.
+;;; [[Ntransition T] -> Boolean] ... -> [[Ntransition T] -> Boolean]
+(define (and-pred . preds)
+  (λ (transition)
+    (andmap (λ (pred)
+              (pred transition))
+            preds)))
 
 ;;; Predicate which matches transitions from set of states.
 ;;; [Setof [State T]] -> [[NTransition T] -> Boolean]
@@ -86,19 +115,59 @@
             (cond [(empty? visit) current]
                   [else (step (set-union current visit)
                               (pred-reachable nfa
-                                              (λ (t)
-                                                (and ((not-pred (from-pred current)) t)
-                                                     ((from-pred visit) t)
-                                                     (pred t)))))]))]
+                                              (and-pred (not-pred (from-pred current))
+                                                        (from-pred visit)
+                                                        pred)))]))]
     (step (set) from)))
-
-;;; All reachable states within NFA.
-;;; [NFA T] -> [Setof [State T]]
-(define (all-reachable nfa)
-  (pred-reachable-from nfa (set (nfa-initial nfa)) (λ (t) true)))
 
 ;;; Epsilon closure of states (all states that can be reached via
 ;;; epsilon transitions from given states).
 ;;; [NFA T] [Setof [State T]] -> [Setof [State T]]
 (define (epsilon-closure nfa states)
   (pred-reachable-from nfa states epsilon-pred))
+
+;;; Converts from NFA to DFA using Powerset construction.
+;;; [NFA T] -> [DFA [Setof T]]
+(define (nfa->dfa nfa)
+  (local [(define initial-state
+            (epsilon-closure nfa (set (nfa-initial nfa))))
+          (define (add-states current-dfa visit-first visit-rest)
+            (local [(define transitions
+                      (pred-transitions nfa
+                                        (and-pred (from-pred visit-first)
+                                                  (not-pred epsilon-pred))))
+                    (define new-transitions
+                      (map (λ (transition)
+                             (cons (cons visit-first
+                                         (cdar transition))
+                                   (epsilon-closure nfa
+                                                    (cdr transition))))
+                           transitions))]
+              (step (make-dfa (set-add (dfa-states current-dfa)
+                                       visit-first)
+                              (hash+list (dfa-transitions current-dfa)
+                                         new-transitions)
+                              (dfa-initial current-dfa)
+                              (if (set-empty? (set-intersect (nfa-accepting nfa)
+                                                             visit-first))
+                                  (dfa-accepting current-dfa)
+                                  (set-add (dfa-accepting current-dfa)
+                                           visit-first)))
+                    (enqueue-list visit-rest (map cdr new-transitions)))))
+          (define (step current-dfa visit)
+            (cond [(queue-empty? visit) current-dfa]
+                  [else (local [(define dequeued (dequeue visit))
+                                (define visit-first (car dequeued))
+                                (define visit-rest (cdr dequeued))]
+                          (cond [(set-member? (dfa-states current-dfa)
+                                              visit-first)
+                                 (step current-dfa visit-rest)]
+                                [else (add-states current-dfa
+                                                  visit-first
+                                                  visit-rest)]))]))]
+    (step (make-dfa (set)
+                    (hash)
+                    initial-state
+                    (set))
+          (enqueue empty-queue
+                   initial-state))))
